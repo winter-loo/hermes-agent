@@ -41,11 +41,16 @@ def _make_message(*, author=None, content="hello", mentions=None, is_dm=False):
 class TestDiscordBotFilter(unittest.TestCase):
     """Test the DISCORD_ALLOW_BOTS filtering logic."""
 
-    def _run_filter(self, message, allow_bots="none", client_user=None):
+    def _run_filter(self, message, allow_bots="none", client_user=None, allow_self_mentions=False):
         """Simulate the on_message filter logic and return whether message was accepted."""
         # Replicate the exact filter logic from discord.py on_message
         if message.author == client_user:
-            return False  # own messages always ignored
+            allow = allow_bots.lower().strip()
+            if not allow_self_mentions or allow != "mentions":
+                return False
+            if not client_user or client_user not in message.mentions:
+                return False
+            return True
 
         if getattr(message.author, "bot", False):
             allow = allow_bots.lower().strip()
@@ -58,11 +63,47 @@ class TestDiscordBotFilter(unittest.TestCase):
         
         return True  # message accepted
 
-    def test_own_messages_always_ignored(self):
-        """Bot's own messages are always ignored regardless of allow_bots."""
+    def test_own_messages_ignored_by_default(self):
+        """Bot's own messages are ignored unless self-mention triggering is explicitly enabled."""
         bot_user = _make_author(is_self=True)
-        msg = _make_message(author=bot_user)
+        msg = _make_message(author=bot_user, mentions=[bot_user])
         self.assertFalse(self._run_filter(msg, "all", bot_user))
+        self.assertFalse(self._run_filter(msg, "mentions", bot_user))
+
+    def test_own_self_mention_accepted_when_explicitly_enabled(self):
+        """With DISCORD_ALLOW_SELF_MENTIONS-style opt-in, own @mentions can trigger."""
+        bot_user = _make_author(is_self=True)
+        msg = _make_message(author=bot_user, mentions=[bot_user])
+        self.assertTrue(
+            self._run_filter(
+                msg,
+                "mentions",
+                bot_user,
+                allow_self_mentions=True,
+            )
+        )
+
+    def test_own_self_mention_opt_in_still_requires_mention_mode_and_actual_mention(self):
+        """Self-trigger opt-in does not accept unmentioned own messages or allow_bots=all."""
+        bot_user = _make_author(is_self=True)
+        unmentioned = _make_message(author=bot_user, mentions=[])
+        mentioned = _make_message(author=bot_user, mentions=[bot_user])
+        self.assertFalse(
+            self._run_filter(
+                unmentioned,
+                "mentions",
+                bot_user,
+                allow_self_mentions=True,
+            )
+        )
+        self.assertFalse(
+            self._run_filter(
+                mentioned,
+                "all",
+                bot_user,
+                allow_self_mentions=True,
+            )
+        )
 
     def test_human_messages_always_accepted(self):
         """Human messages are always accepted regardless of allow_bots."""

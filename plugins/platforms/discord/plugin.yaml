@@ -32,3 +32,11 @@ optional_env:
     description: "Display name for the Discord home channel"
     prompt: "Home channel display name"
     password: false
+  - name: DISCORD_ALLOW_BOTS
+    description: "Bot-authored Discord messages to accept: none, mentions, or all"
+    prompt: "Allow bot-authored Discord messages? (none/mentions/all)"
+    password: false
+  - name: DISCORD_ALLOW_SELF_MENTIONS
+    description: "Allow this Discord bot's own self-mention messages to trigger Hermes when DISCORD_ALLOW_BOTS=mentions"
+    prompt: "Allow self-mention dispatch? (true/false)"
+    password: false

@@ -765,9 +765,25 @@ class DiscordAdapter(BasePlatformAdapter):
                 if adapter_self._dedup.is_duplicate(str(message.id)):
                     return
 
-                # Always ignore our own messages
+                # Ignore our own messages by default. Advanced dispatchers can
+                # opt in to self-mentions for bot-thread handoff workflows:
+                # DISCORD_ALLOW_SELF_MENTIONS=true plus
+                # DISCORD_ALLOW_BOTS=mentions accepts only messages from this
+                # bot that explicitly mention this bot. DISCORD_ALLOW_BOTS=all
+                # still does not accept self-authored messages, to avoid
+                # accidental reply loops from normal bot output.
                 if message.author == self._client.user:
-                    return
+                    _allow_self_mentions = os.getenv(
+                        "DISCORD_ALLOW_SELF_MENTIONS", "false"
+                    ).lower().strip() in {"true", "1", "yes"}
+                    _allow_bots = os.getenv("DISCORD_ALLOW_BOTS", "none").lower().strip()
+                    if (
+                        not _allow_self_mentions
+                        or _allow_bots != "mentions"
+                        or not self._client.user
+                        or self._client.user not in message.mentions
+                    ):
+                        return
 
                 # Ignore Discord system messages (thread renames, pins, member joins, etc.)
                 # Allow both default and reply types — replies have a distinct MessageType.
